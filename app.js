@@ -1,18 +1,27 @@
 require('dotenv').config();
 const express = require("express");
-
+const sequelize = require('./database/connect');
 const app = express();
 const port = process.env.PORT || 5000;
 
-const authRoutes = require('./routes/auth');
-
-
-app.use('/api/v1', authRoutes);
-
-app.listen(port, (err) => {
-    if (err) {
-        console.error("Failed to start server:", err);
-        process.exit(1);
-    }
-    console.log(`Server running on port ${port}`);
+app.use(express.json());
+app.get('/', (req, res) => {
+    res.send("Welcome to the Ravi Shop!"); 
 });
+
+app.use('/api/auth', require('./routes/authRoutes')); 
+
+sequelize.sync({ force: false })  
+    .then(() => {
+        app.listen(port, (err) => {
+            if (err) {
+                console.error("Failed to start server:", err);
+                process.exit(1);
+            }
+            console.log(`Server running on port ${port}`);
+        });
+    })
+    .catch((error) => {
+        console.error("Error syncing database:", error);
+        process.exit(1); 
+    });
