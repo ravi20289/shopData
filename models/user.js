@@ -83,12 +83,6 @@ User.init(
       allowNull: true,
       defaultValue: '1',
     },
-    created_by: {
-      type: DataTypes.INTEGER,
-    },
-    updated_by: {
-      type: DataTypes.INTEGER,
-    },
     createdAt: {
       type: DataTypes.DATE,
       field: 'created_at',

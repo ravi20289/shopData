@@ -1,9 +1,10 @@
 const User = require('../models/user');
-console.log("user is:", User)
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const moment = require('moment');
 const AppError = require('../utils/appError');
+const sequelize = require('../database/connect'); 
+const { QueryTypes } = require('sequelize');
 const catchAsync = require('../utils/catchAsync');
 
 
@@ -67,12 +68,6 @@ exports.createUser = catchAsync(async (req, res, next) => {
         status: status ? status : "1"
     });
 
-    const token = jwt.sign(
-        { userId: userData.user_id, email: userData.email },
-        process.env.JWT_SECRET_KEY,
-        { expiresIn: '1d' }
-    );
-
     return res.status(200).json({
         status: 'success',
         message: 'User registered successfully.',
@@ -83,8 +78,66 @@ exports.createUser = catchAsync(async (req, res, next) => {
                 email: userData.email,
                 mobile: userData.mobile,
             },
-            token,
         },
     });
 
 });
+
+// api to get user 
+
+
+exports.getUser = catchAsync(async (req, res, next) => {
+    const query = `SELECT name, gender, mobile, email FROM user_master`;
+
+    const [result] = await sequelize.query(query, {
+        type: QueryTypes.SELECT, 
+    });
+
+    return res.status(200).json({
+        status: 'success',
+        message: 'Data fetched successfully.',
+        data: result,
+    });
+});
+
+
+// api for user login 
+
+
+exports.userLogin = catchAsync(async (req, res, next) => {
+    const { email, password } = req.body;
+
+    if (!email && !password)
+        return next(new AppError('Email or password missing', 400));
+
+        const existingUser = await User.findOne({ where: { email } });
+        if (!existingUser) {
+            return next(new AppError('No user found with the given Email', 400));
+        }
+
+        const isPasswordCorrect = await bcrypt.compare(password, existingUser.password);
+        if (!isPasswordCorrect) {
+            return next(new AppError('Invalid credentials', 401));
+        }
+
+        const token = jwt.sign(
+            { userId: existingUser.user_id, email: existingUser.email },
+            process.env.JWT_SECRET_KEY,
+            { expiresIn: '1d' }
+        );
+
+        return res.status(200).json({
+            status: 'success',
+            message: 'User logged in successfully.',
+            data: {
+                user: {
+                    user_id: existingUser.user_id,
+                    name: existingUser.name,
+                    email: existingUser.email,
+                    mobile: existingUser.mobile,
+                },
+               
+            },
+        });
+});
+
