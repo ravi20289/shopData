@@ -2,12 +2,21 @@ const User = require('../models/user');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const moment = require('moment');
+const {sendMail} = require('../utils/mail')
 const AppError = require('../utils/appError');
 const sequelize = require('../database/connect'); 
 const { QueryTypes } = require('sequelize');
 const catchAsync = require('../utils/catchAsync');
 
 
+
+const signToken = (payload, expiresIn = '15m') => {
+    const secretKey = process.env.JWT_SECRET_KEY; 
+    if (!payload) {
+        throw new Error("Payload is required");
+    }
+    return jwt.sign(payload, secretKey, { expiresIn });
+};
 
 exports.createUser = catchAsync(async (req, res, next) => {
 
@@ -139,5 +148,67 @@ exports.userLogin = catchAsync(async (req, res, next) => {
                
             },
         });
+});
+
+
+// api for sending email
+exports.sendMail = catchAsync(async (req, res, next) => {
+    const { email } = req.body;
+
+    if (!email) return next(new AppError('Email is required', 400));
+
+    const user = await User.findOne({
+        where: { email },
+    });
+
+    if (!user) return next(new AppError('No user found with this email', 400));
+
+    const token = signToken({ email: user.email });
+    console.log("token is:", token)
+    const mailResponse = await sendMail(email, token);
+
+    if (mailResponse && mailResponse.accepted.length > 0) {
+        return res.status(200).json({
+            status: 'success',
+            message: 'Password reset email sent successfully.',
+        });
+    }
+
+    return res.status(400).json({
+        status: 'fail',
+        message: 'Failed to send password reset email.',
+    });
+});
+
+
+// api for reset password 
+
+
+exports.resetPassword = catchAsync(async (req, res, next) => {
+    const { token } = req.query; 
+    const { newPassword } = req.body;
+
+    if (!token) {
+        return next(new AppError('Token is required', 400));
+    }
+
+    try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET_KEY);
+        const user = await User.findOne({ where: { email: decoded.email } });
+        if (!user) {
+            return next(new AppError('User not found', 404));
+        }
+        const hashedPassword = await bcrypt.hash(newPassword, 12); 
+        user.password = hashedPassword;
+        await user.save();
+
+        res.status(200).json({
+            status: 'success',
+            message: 'Password has been reset successfully.',
+        });
+    } catch (err) {
+        console.error('Error during password reset:', err.message);
+        return next(new AppError('Invalid or expired token', 400));
+    }
 });
 
